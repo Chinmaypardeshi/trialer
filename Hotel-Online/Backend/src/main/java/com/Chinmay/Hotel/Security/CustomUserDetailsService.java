@@ -24,12 +24,15 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username)
             throws UsernameNotFoundException {
 
-        SystemUsers user = usersRepository.findAll()
-            .stream()
-            .filter(u -> u.getUsername().equals(username))
-            .findFirst()
-            .orElseThrow(() ->
-                new UsernameNotFoundException("User not found"));
+        // SystemUsers user = usersRepository.findAll()
+        //     .stream()
+        //     .filter(u -> u.getUsername().equals(username))
+        //     .findFirst()
+        //     .orElseThrow(() ->
+        //         new UsernameNotFoundException("User not found"));
+
+        SystemUsers user = usersRepository.findByUsername(username)
+        .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         return new User(
             user.getUsername(),

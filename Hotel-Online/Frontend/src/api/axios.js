@@ -13,9 +13,13 @@ const api = axios.create({
 api.interceptors.request.use(
     (config) => {
         const auth = localStorage.getItem('auth')
+        console.log('🔐 Request to:', config.url, 'Auth present:', !!auth);
 
         if(auth) {
             config.headers.Authorization = auth
+            console.log('🔐 Full auth header:', config.headers.Authorization);
+            console.log('🔐 Auth header length:', config.headers.Authorization.length);
+            console.log('🔐 All headers:', config.headers);
         }
 
         return config
@@ -25,16 +29,23 @@ api.interceptors.request.use(
 
 // RESPONSE INTERCEPTOR WHICH RUNS ON EVERY RESPONSE ERROR
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        console.log('✅ Axios Success:', response.status, response.config.url);
+        return response;
+    },
     (error) => {
+        console.log('❌ Axios Error:', error.response?.status, error.config?.url);
         if (error.response && error.response.status === 401) {
-            console.warn('401 Unauthorized! -> Logging out...')
+            console.warn('🚨 401 Unauthorized! -> Logging out...')
+            console.log('Current auth in localStorage:', localStorage.getItem('auth'));
 
             //Clear auth data 
             localStorage.removeItem('auth')
+            console.log('Auth cleared, redirecting...');
 
             // Redirect to login page
-            window.location.href = '/login'
+            // window.location.replace('/login')
+            console.log('🚫 Redirect disabled for debugging');
         }
         
         return Promise.reject(error)

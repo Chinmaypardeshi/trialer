@@ -18,6 +18,10 @@ import AdminMenusByShop from './pages/AdminMenusByShop'
 import AdminAddMenu from './pages/AdminAddMenu'
 import AdminUpdateMenu from './pages/AdminUpdateMenu'
 import AdminToggleMenu from './pages/AdminToggleMenu'
+import AdminMenuGroups from './pages/AdminMenuGroups'
+import AdminCreateGroup from './pages/AdminCreateGroup'
+import AdminRenameGroup from './pages/AdminRenameGroup'
+import AdminMoveMenuItem from './pages/AdminMoveMenuItem'
 
 function App() {
   return(
@@ -55,7 +59,10 @@ function App() {
     <Route path="menus/add" element={<AdminAddMenu />} />
     <Route path="menus/update" element={<AdminUpdateMenu />} />
     <Route path="menus/toggle" element={<AdminToggleMenu />} />
-    
+    <Route path="menu-groups" element={<AdminMenuGroups />} />
+    <Route path="menu-groups/create" element={<AdminCreateGroup />} />
+    <Route path="menu-groups/rename" element={<AdminRenameGroup />} />
+    <Route path="menu-groups/move" element={<AdminMoveMenuItem />} />
     
     </Route>
 

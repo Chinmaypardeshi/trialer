@@ -20,15 +20,35 @@ function AdminDashboard() {
          // Async function to fetch dashboard data from backend
         const fetchDashboard = async () => {
 
-            // Call backend API using axios
-            // This hits Spring Boot endpoint and returns JSON data
-            const res = await api.get(
-                '/api/admin/dashboard?fromDate=2025-01-01&toDate=2026-12-31'
-            )
+             // Use current date range
+        const today = new Date()
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+        
+        const fromDate = firstDay.toISOString().split('T')[0]
+        const toDate = lastDay.toISOString().split('T')[0]
+ 
+        const res = await api.get(
+            `/api/admin/dashboard?fromDate=${fromDate}&toDate=${toDate}`
+        )
+        setData(res.data)
 
-            // Save backend response data into React state
-            // res.data contains the JSON returned by backend
-            setData(res.data)
+
+
+
+
+
+            // // Call backend API using axios
+            // // This hits Spring Boot endpoint and returns JSON data
+            // const res = await api.get(
+            //     '/api/admin/dashboard?fromDate=2025-01-01&toDate=2026-12-31'
+            // )
+
+            // // Save backend response data into React state
+            // // res.data contains the JSON returned by backend
+            // setData(res.data)
+        
+        
         }
 
         // Call the function to fetch data
