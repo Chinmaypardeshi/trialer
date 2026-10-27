@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hotel Online - Admin Portal</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Work+Sans:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+
+    <!-- Material Symbols Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+    <!-- Tailwind Config with Custom Colors -->
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+              "on-tertiary-fixed": "#00480f",
+              "on-primary-container": "#451000",
+              "on-background": "#2f2e2e",
+              "secondary-container": "#dee3e6",
+              "primary-dim": "#922c00",
+              "outline": "#787676",
+              "inverse-surface": "#0e0e0e",
+              "on-secondary-fixed": "#3a4042",
+              "on-tertiary-container": "#005e17",
+              "surface-tint": "#a63400",
+              "surface-container-lowest": "#ffffff",
+              "surface-dim": "#d6d4d3",
+              "error-dim": "#9f0519",
+              "on-primary": "#ffefeb",
+              "primary": "#a63400",
+              "on-secondary-fixed-variant": "#565c5f",
+              "on-primary-fixed": "#000000",
+              "primary-fixed-dim": "#fe5e1e",
+              "outline-variant": "#afacac",
+              "on-tertiary": "#d1ffc8",
+              "tertiary": "#006b1b",
+              "tertiary-container": "#91f78e",
+              "error": "#b31b25",
+              "surface-container-high": "#e5e2e1",
+              "primary-container": "#ff7948",
+              "on-secondary": "#eef4f6",
+              "inverse-primary": "#fe5e1e",
+              "secondary-fixed-dim": "#d0d5d8",
+              "surface-variant": "#dfdcdc",
+              "surface-container": "#eae7e7",
+              "surface-container-highest": "#dfdcdc",
+              "error-container": "#fb5151",
+              "primary-fixed": "#ff7948",
+              "surface-bright": "#f9f6f5",
+              "surface-container-low": "#f3f0ef",
+              "surface": "#f9f6f5",
+              "background": "#f9f6f5",
+              "secondary-fixed": "#dee3e6",
+              "tertiary-dim": "#005d16",
+              "on-surface": "#2f2e2e",
+              "secondary-dim": "#4b5153",
+              "on-secondary-container": "#4d5355",
+              "on-tertiary-fixed-variant": "#00691a",
+              "on-error": "#ffefee",
+              "tertiary-fixed": "#91f78e",
+              "inverse-on-surface": "#9e9c9c",
+              "tertiary-fixed-dim": "#83e881",
+              "secondary": "#565c5f",
+              "on-error-container": "#570008",
+              "on-surface-variant": "#5c5b5b",
+              "on-primary-fixed-variant": "#551600"
+            },
+            "borderRadius": {
+              "DEFAULT": "0.125rem",
+              "lg": "0.25rem",
+              "xl": "0.5rem",
+              "full": "0.75rem"
+            },
+            "fontFamily": {
+              "headline": ["Manrope"],
+              "display": ["Manrope"],
+              "body": ["Work Sans"],
+              "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        font-family: 'Work Sans', sans-serif;
+        background-color: #f9f6f5;
+        color: #2f2e2e;
+      }
+      .bento-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 1.5rem;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

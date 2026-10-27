@@ -1,0 +1,1207 @@
+================================================================================
+        HOTEL ONLINE MANAGEMENT SYSTEM - COMPLETE PROJECT SPECIFICATION
+                   For Offline Restaurant Software Integration
+================================================================================
+
+Project Name: Hotel Online Admin Dashboard
+Version: 0.0.1-SNAPSHOT
+Created: April 2026
+Purpose: Centralized admin dashboard to manage multiple restaurant locations, 
+         display aggregated data from offline restaurant software, and provide 
+         revenue analytics
+
+================================================================================
+                        1. PROJECT OVERVIEW & PURPOSE
+================================================================================
+
+This is a Restaurant Management & Analytics Platform designed to:
+
+PRIMARY PURPOSE:
+- Aggregate data from MULTIPLE offline restaurant software systems
+- Provide centralized admin dashboard for restaurant chain management
+- Display order, menu, and revenue analytics for all shops
+- Export reports (Excel & PDF) for business intelligence
+
+SYSTEM ARCHITECTURE:
+- Offline Software (Multiple Locations) → [Data Sync] → Central Online Database
+- Admin Dashboard (Online) ← [REST APIs] ← Central Database
+
+TARGET USERS:
+- Restaurant Chain Administrators
+- Analytics & Reporting Team
+- Order Management Staff
+
+================================================================================
+                    2. COMPLETE TECHNOLOGY STACK
+================================================================================
+
+BACKEND:
+  - Framework: Spring Boot 3.5.7
+  - Language: Java 21
+  - Build Tool: Maven
+  - Web Framework: Spring Web MVC
+  - Database ORM: Spring Data JPA with Hibernate
+  - Security: Spring Security 6.x
+  - Validation: Jakarta Validation (Hibernate Validator)
+  - Utilities: Lombok (annotation processor)
+  - Export Formats:
+    * Excel: Apache POI 5.2.5 (poi-ooxml)
+    * PDF: OpenPDF 3.0.0
+  - Testing: JUnit 5, Spring Boot Test, Spring Security Test
+
+DATABASE:
+  - RDBMS: MySQL 8.0+
+  - Connection Pool: HikariCP (default with Spring Boot)
+  - ORM: JPA/Hibernate
+  - Schema Validation: Hibernate validation (ddl-auto=validate)
+
+FRONTEND:
+  - Framework: React 19.2.0
+  - Build Tool: Vite 7.2.4
+  - Styling: Plain CSS (index.css)
+  - Routing: React Router DOM 7.13.0
+  - HTTP Client: Axios 1.13.4
+  - State Management: React Context API (localStorage for auth tokens)
+  - Linting: ESLint 9.39.1
+
+DEPLOYMENT PLATFORM:
+  - Target: Online cloud platform (ready for Azure, AWS, GCP)
+  - Container Ready: Yes (can be containerized with Docker)
+  - Server Port: 8080 (default Spring Boot)
+  - Frontend Port: 5173 (default Vite dev server)
+
+================================================================================
+                    3. COMPLETE DATABASE SCHEMA
+================================================================================
+
+TABLE: SHOPS
+Description: Represents multiple restaurant locations in the chain
+Columns:
+  - SHOP_ID (PK, INT, AUTO_INCREMENT): Unique identifier for shop
+  - SHOP_NAME (VARCHAR, NOT NULL): Name of restaurant location
+  - LOCATION (VARCHAR, NULLABLE): Address/location of shop
+  - CREATED_AT (DATETIME, AUTO_SET): Creation timestamp
+
+Relationships:
+  - One-to-Many with ORDERS
+  - One-to-Many with MENU
+
+Example Data:
+  1, "Maharashtrian Thali - Downtown", "123 Main St, Mumbai", 2025-01-15
+  2, "Maharashtrian Thali - Airport", "456 Airport Rd, Mumbai", 2025-01-20
+  3, "Maharashtrian Thali - Suburbs", "789 Sub Rd, Pune", 2025-02-01
+
+---
+
+TABLE: MENU_GROUP
+Description: Categories/groups for menu items (e.g., Breads, Curries, Desserts)
+Columns:
+  - GROUP_ID (PK, INT, AUTO_INCREMENT): Unique identifier
+  - SHOP_ID (FK, INT, NOT NULL): Foreign key to SHOPS table
+  - GROUP_NAME (VARCHAR, NOT NULL): Category name (e.g., "Breads")
+  - DESCRIPTION (VARCHAR, NULLABLE): Category description
+  - CREATED_AT (DATETIME, AUTO_SET): Creation timestamp
+  - UPDATED_AT (DATETIME, AUTO_UPDATE): Last modification timestamp
+
+Relationships:
+  - Many-to-One with SHOPS
+  - One-to-Many with MENU
+
+Example Data:
+  1, 1, "Breads", "Indian bread items", 2025-02-01, 2025-02-01
+  2, 1, "Curries", "Gravy-based dishes", 2025-02-01, 2025-02-01
+  3, 1, "Desserts", "Sweet items", 2025-02-01, 2025-03-15
+
+---
+
+TABLE: MENU
+Description: Individual menu items offered at each shop
+Columns:
+  - MENU_ID (PK, INT, AUTO_INCREMENT): Unique item identifier
+  - SHOP_ID (FK, INT, NOT NULL): Foreign key to SHOPS (which shop this item belongs to)
+  - GROUP_ID (FK, INT, NOT NULL): Foreign key to MENU_GROUP
+  - ITEM_NAME (VARCHAR, NOT NULL): Name of menu item (e.g., "Butter Naan")
+  - PRICE (DECIMAL(10,2), NOT NULL): Price of item
+  - IS_ACTIVE (BOOLEAN, DEFAULT true): Whether item is currently available
+  - UPDATED_AT (DATETIME, AUTO_UPDATE): Last modification timestamp
+
+Relationships:
+  - Many-to-One with SHOPS
+  - Many-to-One with MENU_GROUP
+  - One-to-Many with ORDER_ITEMS
+
+Example Data:
+  1, 1, 1, "Butter Naan", 50.00, true, 2025-02-01
+  2, 1, 1, "Garlic Naan", 60.00, true, 2025-02-01
+  3, 1, 2, "Butter Chicken", 250.00, true, 2025-02-05
+  4, 2, 1, "Butter Naan", 55.00, true, 2025-02-15
+
+---
+
+TABLE: SYSTEM_USERS
+Description: Admin users who manage the restaurant
+Columns:
+  - USER_ID (PK, INT, AUTO_INCREMENT): User identifier
+  - USERNAME (VARCHAR, UNIQUE, NOT NULL): Login username
+  - PASSWORD (VARCHAR, NOT NULL): Hashed password
+  - EMAIL (VARCHAR, NULLABLE): Email address
+  - ROLE (VARCHAR, NOT NULL): User role (ADMIN, MANAGER, STAFF) [ENUM: SystemUserRole]
+  - SHOP_ID (FK, INT, NULLABLE): Shop assignment (if user manages specific shop)
+  - IS_ACTIVE (BOOLEAN, DEFAULT true): Account active status
+  - CREATED_AT (DATETIME, AUTO_SET): Creation timestamp
+
+Relationships:
+  - One-to-Many with ORDERS (user creates orders)
+
+---
+
+TABLE: ORDERS
+Description: Customer orders from any shop
+Columns:
+  - ORDER_ID (PK, BIGINT, AUTO_INCREMENT): Unique order identifier
+  - USER_ID (FK, INT, NOT NULL): Foreign key to SYSTEM_USERS (staff who entered order)
+  - SHOP_ID (FK, INT, NOT NULL): Foreign key to SHOPS
+  - DEVICE_ORDER_UUID (VARCHAR(100), UNIQUE, NOT NULL): Unique ID from offline device
+  - ORDER_TIME (DATETIME, NOT NULL, AUTO_SET): When order was placed
+  - PAYMENT_TIME (DATETIME, NULLABLE): When payment was received
+  - TOTAL_AMOUNT (DECIMAL(10,2), NOT NULL): Total order value
+  - MODE_OF_PAYMENT (VARCHAR, NULLABLE): Payment type [ENUM: CASH, ONLINE]
+  - STATUS (VARCHAR, NOT NULL): Order status [ENUM: ACTIVE, PAID, CANCELLED]
+  - SOURCE_DEVICE_ID (VARCHAR, NULLABLE): Which offline device created this order
+  - SYNC_TIME (DATETIME, AUTO_SET): When synced to online system
+
+Relationships:
+  - Many-to-One with SYSTEM_USERS
+  - Many-to-One with SHOPS
+  - One-to-Many with ORDER_ITEMS
+
+Example Data:
+  1, 1, 1, "uuid-001", 2026-04-20 12:30:00, 2026-04-20 12:35:00, 350.00, CASH, PAID, device-1, 2026-04-20 12:40:00
+  2, 1, 1, "uuid-002", 2026-04-20 13:00:00, NULL, 500.00, ONLINE, ACTIVE, device-1, 2026-04-20 13:05:00
+
+---
+
+TABLE: ORDER_ITEMS
+Description: Individual items within each order
+Columns:
+  - ORDER_ITEM_ID (PK, INT, AUTO_INCREMENT): Item line identifier
+  - ORDER_ID (FK, BIGINT, NOT NULL): Foreign key to ORDERS
+  - MENU_ID (FK, INT, NOT NULL): Foreign key to MENU
+  - QUANTITY (INT, NOT NULL): How many of this item
+  - UNIT_PRICE (DECIMAL(10,2), NOT NULL): Price per unit (at time of order)
+  - TOTAL_PRICE (DECIMAL(10,2), NOT NULL): Quantity × Unit Price
+
+Relationships:
+  - Many-to-One with ORDERS
+  - Many-to-One with MENU
+
+Example Data:
+  1, 1, 1, 2, 50.00, 100.00
+  2, 1, 3, 1, 250.00, 250.00
+  3, 2, 2, 1, 60.00, 60.00
+
+---
+
+TABLE: SYNC_LOG
+Description: Tracks data synchronization from offline devices
+Columns:
+  - SYNC_LOG_ID (PK, INT, AUTO_INCREMENT)
+  - SOURCE_DEVICE_ID (VARCHAR): Which offline device synced
+  - SHOP_ID (FK, INT): Which shop location
+  - SYNC_TIME (DATETIME): When sync occurred
+  - RECORDS_SYNCED (INT): How many records were synced
+  - STATUS (VARCHAR): SUCCESS, FAILURE, PARTIAL
+  - ERROR_MESSAGE (VARCHAR, NULLABLE): If failed, what went wrong
+
+---
+
+TABLE: SYSTEM_LOG
+Description: Audit trail of system operations
+Columns:
+  - LOG_ID (PK, INT, AUTO_INCREMENT)
+  - USER_ID (FK, INT): Which user performed action
+  - ACTION (VARCHAR): What action (CREATE, UPDATE, DELETE, VIEW)
+  - ENTITY_TYPE (VARCHAR): What entity (ORDER, MENU, SHOP)
+  - ENTITY_ID (INT/BIGINT): Which entity
+  - TIMESTAMP (DATETIME): When action occurred
+  - DETAILS (TEXT, NULLABLE): Additional details
+
+================================================================================
+                    4. DATA FLOW & INTEGRATION ARCHITECTURE
+================================================================================
+
+OFFLINE → ONLINE SYNC FLOW:
+
+  Offline Software (Restaurant)
+        ↓
+  [Local Database]
+  - Orders created locally
+  - Menu items managed locally
+  - Payment processed locally
+        ↓
+  [Sync Engine - Built by Offline Software Team]
+  - Detects new/modified records
+  - Creates sync payload (JSON)
+  - Sends to Online APIs via HTTP/HTTPS
+        ↓
+  Central Online System (This Project)
+  [POST /api/orders] ← Receives order data
+  [POST /api/admin/menus/{shopId}] ← Receives menu data
+        ↓
+  [MySQL Database] ← Stores centralized data
+        ↓
+  [Admin Dashboard] ← Displays aggregated data
+        ↓
+  Administrators view consolidated reports, analytics, revenue
+
+KEY REQUIREMENTS FOR OFFLINE SOFTWARE:
+
+1. DEVICE IDENTIFICATION
+   - Each offline device must have unique SOURCE_DEVICE_ID
+   - Used to track which device created which order
+   - Helps with debugging sync issues
+
+2. UNIQUE ORDER IDENTIFIERS
+   - DEVICE_ORDER_UUID: Unique ID generated by offline device
+   - Used to prevent duplicate orders during sync
+   - If sync fails and retries, same UUID = skip duplicate
+
+3. BATCH SYNC
+   - Offline software should batch multiple orders
+   - Send as array in single API call for efficiency
+   - Include timestamp when order was created locally
+
+4. TIMESTAMP INTEGRITY
+   - Offline device must have accurate local time
+   - ORDER_TIME should be when order was placed (local time)
+   - SYNC_TIME updated by online system
+
+5. SHOP IDENTIFICATION
+   - Offline device knows which SHOP_ID it belongs to
+   - Include SHOP_ID in all sync payloads
+   - Enables multi-location tracking
+
+================================================================================
+                    5. COMPLETE REST API SPECIFICATIONS
+================================================================================
+
+BASE URL: http://localhost:8080/api
+PROTOCOL: HTTP/HTTPS
+CONTENT-TYPE: application/json
+AUTHENTICATION: Spring Security (Basic Auth or Bearer tokens)
+
+---
+
+5.1 AUTHENTICATION ENDPOINTS
+PATH: /api/auth
+
+ENDPOINT: POST /api/auth/login
+AUTH: Basic Auth (username:password in header)
+REQUEST:
+  Authorization: Basic base64(username:password)
+
+RESPONSE (200 OK):
+  {
+    "message": "Login successful",
+    "role": "ADMIN"
+  }
+
+RESPONSE (401 Unauthorized):
+  Invalid credentials
+
+---
+
+5.2 ORDER CREATION (For Offline Software Integration)
+PATH: /api/orders
+
+ENDPOINT: POST /api/orders/
+METHOD: POST
+AUTH: Public (or Bearer Token)
+PURPOSE: Create order from offline device
+
+REQUEST BODY (CreateOrderRequest):
+  {
+    "deviceOrderUuid": "uuid-unique-per-device",
+    "userId": 1,
+    "shopId": 1,
+    "orderTime": "2026-04-20T12:30:00",
+    "totalAmount": 350.00,
+    "modeOfPayment": "CASH",
+    "sourceDeviceId": "device-uuid-1",
+    "orderItems": [
+      {
+        "menuId": 1,
+        "quantity": 2,
+        "unitPrice": 50.00
+      },
+      {
+        "menuId": 3,
+        "quantity": 1,
+        "unitPrice": 250.00
+      }
+    ]
+  }
+
+RESPONSE (201 Created):
+  {
+    "orderId": 1,
+    "deviceOrderUuid": "uuid-unique-per-device",
+    "shopId": 1,
+    "totalAmount": 350.00,
+    "status": "ACTIVE",
+    "orderTime": "2026-04-20T12:30:00",
+    "orderItems": [...]
+  }
+
+ERROR CASES:
+  - 400 Bad Request: Invalid data format
+  - 409 Conflict: Duplicate deviceOrderUuid (already exists)
+  - 500 Internal Server Error: Database error
+
+---
+
+5.3 ADMIN DASHBOARD
+PATH: /api/admin/dashboard
+
+ENDPOINT: GET /api/admin/dashboard
+AUTH: ADMIN role required
+PURPOSE: Get aggregated dashboard metrics
+
+QUERY PARAMS:
+  - fromDate (required): LocalDate (YYYY-MM-DD)
+  - toDate (required): LocalDate (YYYY-MM-DD)
+
+REQUEST:
+  GET /api/admin/dashboard?fromDate=2026-04-01&toDate=2026-04-20
+
+RESPONSE (200 OK):
+  {
+    "totalRevenue": 50000.00,
+    "totalOrders": 150,
+    "totalShops": 3,
+    "averageOrderValue": 333.33,
+    "topShop": {
+      "shopId": 1,
+      "shopName": "Downtown",
+      "revenue": 25000.00
+    },
+    "topItem": {
+      "menuId": 3,
+      "itemName": "Butter Chicken",
+      "quantity": 200
+    },
+    "paymentModeBreakdown": {
+      "CASH": 30000.00,
+      "ONLINE": 20000.00
+    },
+    "dateRange": "2026-04-01 to 2026-04-20"
+  }
+
+---
+
+5.4 MENU MANAGEMENT (Admin)
+PATH: /api/admin/menus
+
+ENDPOINT 4A: GET /api/admin/menus/{shopId}
+AUTH: ADMIN role
+PURPOSE: Get all menu items for a shop
+
+REQUEST:
+  GET /api/admin/menus/1
+
+RESPONSE (200 OK):
+  [
+    {
+      "menuId": 1,
+      "itemName": "Butter Naan",
+      "price": 50.00,
+      "groupId": 1,
+      "groupName": "Breads",
+      "isActive": true
+    },
+    {
+      "menuId": 2,
+      "itemName": "Garlic Naan",
+      "price": 60.00,
+      "groupId": 1,
+      "groupName": "Breads",
+      "isActive": true
+    }
+  ]
+
+---
+
+ENDPOINT 4B: POST /api/admin/menus/{shopId}
+AUTH: ADMIN role
+PURPOSE: Add new menu item
+
+REQUEST BODY (AdminMenuRequestDTO):
+  {
+    "itemName": "Paneer Butter Naan",
+    "price": 80.00,
+    "groupId": 1
+  }
+
+RESPONSE (201 Created):
+  {
+    "menuId": 5,
+    "shopId": 1,
+    "itemName": "Paneer Butter Naan",
+    "price": 80.00,
+    "groupId": 1,
+    "isActive": true
+  }
+
+---
+
+ENDPOINT 4C: PUT /api/admin/menus/{menuId}
+AUTH: ADMIN role
+PURPOSE: Update menu item
+
+REQUEST BODY:
+  {
+    "itemName": "Paneer Butter Naan (New Recipe)",
+    "price": 90.00,
+    "groupId": 1
+  }
+
+RESPONSE (200 OK): Updated menu item
+
+---
+
+ENDPOINT 4D: PATCH /api/admin/menus/{menuId}/status
+AUTH: ADMIN role
+PURPOSE: Toggle menu item active/inactive
+
+REQUEST:
+  PATCH /api/admin/menus/5/status?isActive=false
+
+RESPONSE (204 No Content): No body
+
+---
+
+ENDPOINT 4E: GET /api/admin/menus/grouped/{shopId}
+AUTH: ADMIN role
+PURPOSE: Get menus grouped by category (for frontend display)
+
+REQUEST:
+  GET /api/admin/menus/grouped/1
+
+RESPONSE (200 OK):
+  [
+    {
+      "groupId": 1,
+      "groupName": "Breads",
+      "items": [
+        {"menuId": 1, "itemName": "Butter Naan", "price": 50.00, "isActive": true},
+        {"menuId": 2, "itemName": "Garlic Naan", "price": 60.00, "isActive": true}
+      ]
+    },
+    {
+      "groupId": 2,
+      "groupName": "Curries",
+      "items": [
+        {"menuId": 3, "itemName": "Butter Chicken", "price": 250.00, "isActive": true}
+      ]
+    }
+  ]
+
+---
+
+5.5 MENU GROUP MANAGEMENT (Admin)
+PATH: /api/admin/menu-groups
+
+ENDPOINT 5A: GET /api/admin/menu-groups/shop/{shopId}
+AUTH: ADMIN role
+PURPOSE: List all menu categories for a shop
+
+RESPONSE (200 OK):
+  [
+    {
+      "groupId": 1,
+      "shopId": 1,
+      "groupName": "Breads",
+      "description": "Indian bread items"
+    },
+    {
+      "groupId": 2,
+      "shopId": 1,
+      "groupName": "Curries",
+      "description": "Gravy-based dishes"
+    }
+  ]
+
+---
+
+ENDPOINT 5B: POST /api/admin/menu-groups/shop/{shopId}
+AUTH: ADMIN role
+PURPOSE: Create new menu category
+
+REQUEST BODY:
+  {
+    "groupName": "Desserts",
+    "description": "Sweet items"
+  }
+
+RESPONSE (201 Created): New group object
+
+---
+
+ENDPOINT 5C: PUT /api/admin/menu-groups/{groupId}
+AUTH: ADMIN role
+PURPOSE: Rename menu category
+
+REQUEST BODY:
+  {
+    "groupName": "Indian Breads",
+    "description": "Updated description"
+  }
+
+RESPONSE (200 OK): Updated group object
+
+---
+
+ENDPOINT 5D: DELETE /api/admin/menu-groups/{groupId}
+AUTH: ADMIN role
+PURPOSE: Delete menu category
+
+RESPONSE (204 No Content): No body
+
+---
+
+ENDPOINT 5E: PUT /api/admin/menu-groups/{menuId}/move
+AUTH: ADMIN role
+PURPOSE: Move menu item to different category
+
+REQUEST BODY (MoveMenuItemRequestDTO):
+  {
+    "targetGroupId": 3
+  }
+
+RESPONSE (204 No Content): No body
+
+---
+
+5.6 ORDER MANAGEMENT (Admin)
+PATH: /api/admin/orders
+
+ENDPOINT 6A: GET /api/admin/orders
+AUTH: ADMIN role
+PURPOSE: List orders with optional status filter
+
+QUERY PARAMS:
+  - status (optional): ACTIVE, PAID, CANCELLED
+
+REQUEST:
+  GET /api/admin/orders?status=PAID
+
+RESPONSE (200 OK):
+  [
+    {
+      "orderId": 1,
+      "shopId": 1,
+      "shopName": "Downtown",
+      "totalAmount": 350.00,
+      "status": "PAID",
+      "orderTime": "2026-04-20T12:30:00",
+      "paymentTime": "2026-04-20T12:35:00"
+    }
+  ]
+
+---
+
+ENDPOINT 6B: GET /api/admin/orders/{orderId}
+AUTH: ADMIN role
+PURPOSE: Get order details
+
+REQUEST:
+  GET /api/admin/orders/1
+
+RESPONSE (200 OK):
+  {
+    "orderId": 1,
+    "shopId": 1,
+    "shopName": "Downtown",
+    "userId": 1,
+    "totalAmount": 350.00,
+    "status": "PAID",
+    "orderTime": "2026-04-20T12:30:00",
+    "paymentTime": "2026-04-20T12:35:00",
+    "modeOfPayment": "CASH",
+    "orderItems": [
+      {
+        "orderItemId": 1,
+        "menuId": 1,
+        "itemName": "Butter Naan",
+        "quantity": 2,
+        "unitPrice": 50.00,
+        "totalPrice": 100.00
+      },
+      {
+        "orderItemId": 2,
+        "menuId": 3,
+        "itemName": "Butter Chicken",
+        "quantity": 1,
+        "unitPrice": 250.00,
+        "totalPrice": 250.00
+      }
+    ]
+  }
+
+---
+
+ENDPOINT 6C: PATCH /api/admin/orders/{orderId}/status
+AUTH: ADMIN role
+PURPOSE: Update order status
+
+REQUEST BODY (UpdateOrderStatusDTO):
+  {
+    "status": "PAID"
+  }
+
+Valid status values: ACTIVE, PAID, CANCELLED
+
+RESPONSE (200 OK):
+  "Order status updated successfully"
+
+---
+
+5.7 REVENUE ANALYTICS
+PATH: /api/admin/orders/revenue
+
+ENDPOINTS:
+  GET /api/admin/orders/revenue/daily?date=2026-04-20
+  GET /api/admin/orders/revenue/weekly?date=2026-04-20
+  GET /api/admin/orders/revenue/monthly?year=2026&month=4
+  GET /api/admin/orders/revenue/yearly?year=2026
+  GET /api/admin/orders/revenue/custom?fromDate=2026-04-01&toDate=2026-04-20
+
+RESPONSE (200 OK):
+  {
+    "period": "2026-04-20",
+    "totalRevenue": 8500.00,
+    "totalOrders": 25,
+    "averageOrderValue": 340.00,
+    "paymentBreakdown": {
+      "CASH": 5000.00,
+      "ONLINE": 3500.00
+    },
+    "topShops": [
+      {
+        "shopId": 1,
+        "shopName": "Downtown",
+        "revenue": 4500.00,
+        "orders": 14
+      },
+      {
+        "shopId": 2,
+        "shopName": "Airport",
+        "revenue": 4000.00,
+        "orders": 11
+      }
+    ]
+  }
+
+---
+
+5.8 ANALYTICS - TOP ITEMS
+PATH: /api/admin/analytics
+
+ENDPOINT 8A: GET /api/admin/analytics/top-groups
+AUTH: ADMIN role
+PURPOSE: Most ordered categories
+
+REQUEST:
+  GET /api/admin/analytics/top-groups?fromDate=2026-04-01&toDate=2026-04-20
+
+RESPONSE (200 OK):
+  [
+    {
+      "groupId": 1,
+      "groupName": "Breads",
+      "totalQuantity": 500,
+      "revenue": 25000.00
+    },
+    {
+      "groupId": 2,
+      "groupName": "Curries",
+      "totalQuantity": 300,
+      "revenue": 50000.00
+    }
+  ]
+
+---
+
+ENDPOINT 8B: GET /api/admin/analytics/top-items/{groupId}/items
+AUTH: ADMIN role
+PURPOSE: Most ordered items in a category
+
+REQUEST:
+  GET /api/admin/analytics/top-items/1/items?fromDate=2026-04-01&toDate=2026-04-20
+
+RESPONSE (200 OK):
+  [
+    {
+      "menuId": 1,
+      "itemName": "Butter Naan",
+      "totalQuantity": 300,
+      "revenue": 15000.00
+    },
+    {
+      "menuId": 2,
+      "itemName": "Garlic Naan",
+      "totalQuantity": 200,
+      "revenue": 12000.00
+    }
+  ]
+
+---
+
+5.9 EXPORT ENDPOINTS
+
+ENDPOINT 9A: GET /api/admin/orders/export/excel
+AUTH: ADMIN role
+RESPONSE TYPE: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+REQUEST:
+  GET /api/admin/orders/export/excel?from=2026-04-01&to=2026-04-20
+
+RESPONSE: Excel file (.xlsx) as attachment
+Includes: Order ID, Shop, Total Amount, Status, Payment Mode, Date
+
+---
+
+ENDPOINT 9B: GET /api/admin/orders/test (PDF Export)
+AUTH: ADMIN role
+RESPONSE TYPE: application/pdf
+
+REQUEST:
+  GET /api/admin/orders/test?fromDate=2026-04-01&toDate=2026-04-20
+
+RESPONSE: PDF file as inline document
+Includes: Report header, order details, totals, summaries
+
+================================================================================
+                    6. DATA MODELS & ENTITY CLASSES
+================================================================================
+
+Package: com.Chinmay.Hotel.Entity
+
+KEY ENTITIES:
+
+1. Orders.java
+   - OrderId (Long, PK)
+   - User (ManyToOne → SystemUsers)
+   - DeviceOrderUuid (String, unique)
+   - OrderTime (LocalDateTime)
+   - PaymentTime (LocalDateTime)
+   - TotalAmount (BigDecimal)
+   - ModeOfPayment (Enum: CASH, ONLINE)
+   - Status (Enum: ACTIVE, PAID, CANCELLED)
+   - SourceDeviceId (String) - for offline device tracking
+   - Shop (ManyToOne → Shops)
+   - OrderItems (OneToMany → OrderItems)
+
+2. OrderItems.java
+   - OrderItemId (Integer, PK)
+   - Order (ManyToOne → Orders)
+   - MenuItem (ManyToOne → Menu)
+   - Quantity (Integer)
+   - UnitPrice (BigDecimal)
+   - TotalPrice (Calculated: Quantity × UnitPrice)
+
+3. Menu.java
+   - MenuId (Integer, PK)
+   - Shop (ManyToOne → Shops)
+   - MenuGroup (ManyToOne → MenuGroup)
+   - ItemName (String)
+   - Price (BigDecimal)
+   - IsActive (Boolean)
+   - UpdatedAt (LocalDateTime)
+   - OrderItems (OneToMany → OrderItems)
+
+4. MenuGroup.java
+   - GroupId (Integer, PK)
+   - Shop (ManyToOne → Shops)
+   - GroupName (String)
+   - Description (String)
+   - CreatedAt (LocalDateTime)
+   - UpdatedAt (LocalDateTime)
+
+5. Shops.java
+   - ShopId (Integer, PK)
+   - ShopName (String)
+   - Location (String)
+   - CreatedAt (LocalDateTime)
+
+6. SystemUsers.java
+   - UserId (Integer, PK)
+   - Username (String, unique)
+   - Password (String, hashed)
+   - Email (String)
+   - Role (Enum: ADMIN, MANAGER, STAFF)
+   - ShopId (Foreign key, nullable)
+   - IsActive (Boolean)
+   - CreatedAt (LocalDateTime)
+
+7. SyncLog.java
+   - Tracks data sync from offline devices
+
+8. SystemLog.java
+   - Audit trail of all system operations
+
+================================================================================
+                    7. ENUMERATIONS
+================================================================================
+
+OrderStatus.java
+  - ACTIVE: Order is pending payment/completion
+  - PAID: Order has been paid
+  - CANCELLED: Order was cancelled
+
+PaymentMode.java
+  - CASH: Paid in cash
+  - ONLINE: Paid via online methods
+
+SystemUserRole.java
+  - ADMIN: Full access to all features
+  - MANAGER: Can manage menu and orders for assigned shop
+  - STAFF: Limited access (probably just order entry)
+
+ServerEventType.java
+  - Possible events: ORDER_CREATED, PAYMENT_RECEIVED, MENU_UPDATED, etc.
+
+================================================================================
+                    8. FRONTEND STRUCTURE
+================================================================================
+
+Framework: React 19 + Vite + React Router DOM 7
+
+FRONTEND FOLDER STRUCTURE:
+
+/src
+  /api
+    - axios.js: Configured HTTP client with auth headers
+  
+  /auth
+    - Authentication related components
+    - Login logic
+    - Token management
+  
+  /components
+    - ProtectedRoute.jsx: Route guard for authenticated pages
+    - Reusable UI components
+  
+  /layouts
+    - AdminLayout.jsx: Main dashboard layout
+  
+  /pages
+    - Login.jsx: Login page
+    - AdminDashboard.jsx: Main dashboard with metrics
+    - AdminMenuGroups.jsx: Manage menu categories
+    - AdminAddMenu.jsx: Add new menu item
+    - AdminUpdateMenu.jsx: Edit menu item
+    - AdminRenameGroup.jsx: Rename category
+    - AdminMoveMenuItem.jsx: Move items between categories
+    - AdminToggleMenu.jsx: Activate/deactivate items
+    - AdminOrders.jsx: List orders with filters
+    - AdminOrderDetails.jsx: View order details
+    - AdminMenusByShop.jsx: Browse menu items by shop
+    - AdminCreateGroup.jsx: Create new menu category
+    - AdminAnalyticsController: Analytics pages
+      * AdminTopGroups.jsx
+      * AdminTopItems.jsx
+    - AdminRevenueController: Revenue reports
+      * AdminDailyRevenue.jsx
+      * AdminWeeklyRevenue.jsx
+      * AdminMonthlyRevenue.jsx
+      * AdminYearlyRevenue.jsx
+      * AdminCustomRevenue.jsx
+    - AdminExportController: Export pages
+      * AdminExportExcel.jsx
+      * AdminExportPdf.jsx
+  
+  /utils
+    - Helper functions
+    - Constants
+    - Date formatters
+  
+  - App.jsx: Main app component with routing
+  - main.jsx: Entry point
+  - index.css: Styling
+
+KEY FRONTEND FEATURES:
+  - Protected routes (requires Admin login)
+  - Real-time API integration via Axios
+  - State persistence with localStorage
+  - Date range pickers for analytics
+  - Table views for order/menu listings
+  - Export to Excel/PDF functionality
+  - Responsive design
+
+================================================================================
+                    9. SECURITY DETAILS
+================================================================================
+
+AUTHENTICATION:
+  - Spring Security 6.x
+  - Basic Authentication (username:password)
+  - Credentials sent in Authorization header
+  - Backend validates against SYSTEM_USERS table
+
+PASSWORD SECURITY:
+  - Passwords are hashed using BCryptPasswordEncoder
+  - Never store plain text passwords
+
+SESSION MANAGEMENT:
+  - Frontend stores JWT/auth token in localStorage
+  - Token sent with every API request via Axios interceptor
+  - Authorization header: "Authorization: Bearer {token}"
+
+AUTHORIZATION:
+  - Role-based access control (RBAC)
+  - @PreAuthorize("hasRole('ADMIN')") on admin endpoints
+  - Only ADMIN users can access /api/admin/** endpoints
+
+CORS CONFIGURATION:
+  - Configured to allow requests from React frontend
+  - Frontend runs on port 5173 (dev) or different domain (prod)
+  - Backend exposes APIs on port 8080
+
+HTTPS (PRODUCTION):
+  - Should use HTTPS for deployment
+  - SSL/TLS certificates required
+  - Enforce API authentication and encryption
+
+================================================================================
+                    10. DEPLOYMENT & SETUP INSTRUCTIONS
+================================================================================
+
+PREREQUISITES:
+  - Java 21 JDK installed
+  - MySQL 8.0+ installed and running
+  - Node.js 18+ installed
+  - Maven 3.8+ installed (or use ./mvnw)
+
+DATABASE SETUP:
+1. Create MySQL database:
+   CREATE DATABASE maharashtrian_thali;
+
+2. Update Backend/src/main/resources/application.properties:
+   spring.datasource.url=jdbc:mysql://localhost:3306/maharashtrian_thali
+   spring.datasource.username=root
+   spring.datasource.password=root
+
+3. Hibernate will create tables automatically on first run (ddl-auto=update)
+   OR validate existing tables (ddl-auto=validate)
+
+BACKEND SETUP & RUN:
+1. Navigate to Backend folder:
+   cd Backend
+
+2. Install dependencies (first time only):
+   ./mvnw clean install
+
+3. Run Spring Boot application:
+   ./mvnw spring-boot:run
+
+   Backend will start at: http://localhost:8080
+   API endpoints available at: http://localhost:8080/api/**
+
+FRONTEND SETUP & RUN:
+1. Navigate to Frontend folder:
+   cd Frontend
+
+2. Install dependencies:
+   npm install
+
+3. Run development server:
+   npm run dev
+
+   Frontend will start at: http://localhost:5173
+
+4. Access in browser:
+   http://localhost:5173/login
+   Login with admin credentials
+
+PRODUCTION BUILD:
+1. Backend:
+   ./mvnw clean package
+   java -jar target/Hotel-0.0.1-SNAPSHOT.jar
+
+2. Frontend:
+   npm run build
+   npm run preview
+   (Or deploy dist/ folder to static hosting)
+
+DOCKER DEPLOYMENT:
+1. Create Dockerfile for backend
+2. Create docker-compose for multi-container setup
+3. Push to container registry (Docker Hub, ACR, ECR)
+4. Deploy to cloud platform (Azure Container Instances, AWS ECS, etc.)
+
+================================================================================
+                    11. REQUIREMENTS FOR OFFLINE SOFTWARE
+================================================================================
+
+CRITICAL INTEGRATION REQUIREMENTS:
+
+1. SYNC ARCHITECTURE:
+   - Offline software must have local database with same schema
+   - Implement sync engine to periodically push data to online system
+   - Use REST APIs to POST orders and menu items
+
+2. DATA MAPPING:
+   - Offline device must map its local data to online schema
+   - Example: Map "Device Order ID" → "deviceOrderUuid"
+   - Ensure SHOP_ID matches between offline and online
+
+3. UNIQUE IDENTIFIERS:
+   - Generate DEVICE_ORDER_UUID (e.g., UUID v4) for each order
+   - Use SOURCE_DEVICE_ID to identify which device created data
+   - Prevents duplicates during retry scenarios
+
+4. TIMESTAMP REQUIREMENTS:
+   - Offline device must have accurate system time
+   - Include ORDER_TIME as when order was placed
+   - Online system will set SYNC_TIME upon receipt
+
+5. ERROR HANDLING:
+   - Offline software should:
+     * Retry failed API calls (exponential backoff)
+     * Queue orders if internet unavailable
+     * Sync when connection restored
+     * Log all sync attempts for debugging
+
+6. API INTEGRATION ENDPOINTS TO USE:
+   - POST /api/orders (to send order data)
+   - POST /api/admin/menus/{shopId} (to sync menu items)
+   - POST /api/admin/menu-groups/shop/{shopId} (to sync categories)
+   - Other GET endpoints for verification/sync validation
+
+7. AUTHENTICATION:
+   - Offline software must authenticate using valid admin credentials
+   - Store credentials securely (not hardcoded)
+   - Use same authentication mechanism as online system
+
+8. DATA VALIDATION:
+   - Validate all data before sending
+   - Ensure prices are positive
+   - Verify shop IDs exist
+   - Check item quantities > 0
+
+9. BATCH OPERATIONS:
+   - Batch multiple orders into single API call if possible
+   - Reduces network overhead
+   - More efficient processing
+
+10. MONITORING & LOGGING:
+    - Log all sync activities
+    - Capture error details for troubleshooting
+    - Monitor sync frequency and success rates
+    - Alert on repeated failures
+
+================================================================================
+                    12. DEPLOYMENT PLATFORM READINESS
+================================================================================
+
+CLOUD DEPLOYMENT OPTIONS:
+- Azure App Service + Azure Database for MySQL
+- AWS Elastic Beanstalk + RDS MySQL
+- Google Cloud App Engine + Cloud SQL
+- DigitalOcean App Platform + Managed Database
+- Any Docker-capable cloud platform
+
+CONTAINERIZATION:
+- Application is Docker-ready
+- Create Dockerfile with Java 21 base image
+- Package with Maven: mvn clean package
+- Create docker-compose for MySQL + Backend + Frontend
+
+ENVIRONMENT CONFIGURATION:
+- Use environment variables for database connection
+- Configure different settings for dev/staging/production
+- Support external configuration files
+
+SCALING:
+- Stateless backend design (scales horizontally)
+- Load balance multiple backend instances
+- Database replication for high availability
+- CDN for static frontend assets
+
+MONITORING:
+- Spring Boot Actuator for health checks
+- Log aggregation (ELK stack, DataDog, etc.)
+- Error tracking (Sentry, Rollbar)
+- Performance monitoring (APM tools)
+
+================================================================================
+                    13. PROJECT ROADMAP & FUTURE ENHANCEMENTS
+================================================================================
+
+PHASE 1 (CURRENT):
+✓ Multi-shop order management
+✓ Menu and category management
+✓ Admin dashboard with basic metrics
+✓ Revenue reporting
+✓ Excel/PDF export
+✓ REST API for offline integration
+
+PHASE 2 (PLANNED):
+- Real-time order notifications
+- SMS/Email alerts for orders
+- Advanced analytics with charts
+- Customer loyalty program
+- Promotional campaigns
+- Inventory tracking
+- Staff performance metrics
+
+PHASE 3 (FUTURE):
+- Mobile app for customers
+- QR-based ordering
+- Kitchen display system (KDS)
+- Delivery management
+- Multi-language support
+- Advanced security (2FA, SSO)
+- AI-powered recommendations
+- Subscription billing
+
+================================================================================
+                    14. SUPPORT & MAINTENANCE
+================================================================================
+
+RESOURCES:
+- Spring Boot Documentation: https://spring.io/projects/spring-boot
+- React Documentation: https://react.dev
+- MySQL Documentation: https://dev.mysql.com/doc/
+- Vite Documentation: https://vitejs.dev
+- React Router Documentation: https://reactrouter.com
+
+TROUBLESHOOTING:
+
+1. Database connection fails:
+   - Check MySQL is running
+   - Verify connection string in application.properties
+   - Ensure database exists and credentials are correct
+
+2. CORS errors:
+   - Check backend CORS configuration
+   - Verify frontend URL is whitelisted
+   - Ensure credentials are included in requests
+
+3. API returns 401 Unauthorized:
+   - Check authentication credentials
+   - Verify token is included in headers
+   - Ensure user has ADMIN role
+
+4. Port conflicts:
+   - Backend: Change server.port in application.properties
+   - Frontend: Change port in vite.config.js
+
+================================================================================
+                    END OF PROJECT SPECIFICATION
+================================================================================
+
+Version: 1.0
+Last Updated: April 20, 2026
+For use in all offline restaurant software integration discussions

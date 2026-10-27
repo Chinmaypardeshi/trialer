@@ -1,0 +1,572 @@
+================================================================================
+                    HOTEL ONLINE - API DOCUMENTATION
+================================================================================
+
+PROJECT: Hotel Online Management System
+CREATED: April 20, 2026
+BASE URL: http://localhost:8080/api
+
+================================================================================
+                           TABLE OF CONTENTS
+================================================================================
+1. Authentication Controller
+2. Orders Controller
+3. Admin Dashboard Controller
+4. Admin Menu Controller
+5. Admin Menu Group Controller
+6. Admin Order Controller
+7. Admin Analytics Controller
+8. Frontend Design Recommendations
+
+================================================================================
+1. AUTHENTICATION CONTROLLER (/api/auth)
+================================================================================
+
+ENDPOINT: GET /api/auth/login
+PURPOSE: Login endpoint - validates user via Spring Security
+AUTH REQUIRED: Public
+DESCRIPTION: If the user reaches this endpoint, Spring Security has already 
+validated them.
+
+Request:
+  - No request body needed
+  - Credentials are validated by Spring Security
+
+Response (200 OK):
+  {
+    "message": "Login successful",
+    "role": "ADMIN"
+  }
+
+================================================================================
+2. ORDERS CONTROLLER (/api/orders)
+================================================================================
+
+ENDPOINT: POST /api/orders/
+PURPOSE: Create a new order
+AUTH REQUIRED: Public
+DESCRIPTION: Customer places a new order with order items
+
+Request Headers:
+  Content-Type: application/json
+
+Request Body (CreateOrderRequest):
+  {
+    "orderItems": [
+      {
+        "menuId": 1,
+        "quantity": 2,
+        "price": 250.00
+      }
+    ]
+  }
+
+Response (201 Created):
+  Returns Orders entity with:
+  - orderId
+  - items
+  - totalPrice
+  - timestamp
+
+================================================================================
+3. ADMIN DASHBOARD CONTROLLER (/api/admin/dashboard)
+================================================================================
+
+ENDPOINT: GET /api/admin/dashboard
+PURPOSE: Get dashboard summary data for admin overview
+AUTH REQUIRED: ADMIN role
+DESCRIPTION: Retrieves aggregated metrics for the admin dashboard
+
+Query Parameters:
+  - fromDate (required): LocalDate (YYYY-MM-DD format)
+  - toDate (required): LocalDate (YYYY-MM-DD format)
+
+Example URL:
+  GET /api/admin/dashboard?fromDate=2026-04-01&toDate=2026-04-20
+
+Response (200 OK):
+  Returns AdminDashboardDTO with aggregated metrics for the date range
+
+================================================================================
+4. ADMIN MENU CONTROLLER (/api/admin/menus)
+================================================================================
+
+ENDPOINT 1: GET /api/admin/menus/{shopId}
+PURPOSE: Get all menu items for a specific shop
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - shopId (required): Integer
+
+Response (200 OK):
+  Returns List of AdminMenuResponseDTO objects containing:
+  - menuId
+  - menuName
+  - description
+  - price
+  - isActive
+  - groupId
+
+---
+
+ENDPOINT 2: POST /api/admin/menus/{shopId}
+PURPOSE: Add new menu item to a shop
+AUTH REQUIRED: ADMIN role
+METHOD: POST
+
+Path Parameters:
+  - shopId (required): Integer
+
+Request Body (AdminMenuRequestDTO):
+  {
+    "menuName": "Butter Naan",
+    "description": "Soft warm naan with butter",
+    "price": 50.00,
+    "groupId": 1
+  }
+
+Response (201 Created):
+  Returns AdminMenuResponseDTO with the newly created menu item
+
+---
+
+ENDPOINT 3: PUT /api/admin/menus/{menuId}
+PURPOSE: Update existing menu item
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - menuId (required): Integer
+
+Request Body (AdminMenuRequestDTO):
+  {
+    "menuName": "Paneer Butter Naan",
+    "description": "Soft naan with paneer and butter",
+    "price": 80.00,
+    "groupId": 1
+  }
+
+Response (200 OK):
+  Returns updated AdminMenuResponseDTO
+
+---
+
+ENDPOINT 4: PATCH /api/admin/menus/{menuId}/status
+PURPOSE: Toggle menu item active/inactive status
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - menuId (required): Integer
+
+Query Parameters:
+  - isActive (required): Boolean (true/false)
+
+Example URL:
+  PATCH /api/admin/menus/5/status?isActive=false
+
+Response (204 No Content):
+  Returns empty response on success
+
+---
+
+ENDPOINT 5: GET /api/admin/menus/grouped/{shopId}
+PURPOSE: Get all menu items grouped by category
+AUTH REQUIRED: ADMIN role
+DESCRIPTION: Returns menus in frontend-friendly grouped format
+
+Path Parameters:
+  - shopId (required): Integer
+
+Response (200 OK):
+  Returns List of AdminGroupedMenuDTO objects with items grouped by category
+
+================================================================================
+5. ADMIN MENU GROUP CONTROLLER (/api/admin/menu-groups)
+================================================================================
+
+ENDPOINT 1: GET /api/admin/menu-groups/shop/{shopId}
+PURPOSE: Get all menu groups/categories for a shop
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - shopId (required): Integer
+
+Response (200 OK):
+  Returns List of AdminMenuGroupResponseDTO:
+  - groupId
+  - shopId
+  - groupName
+  - description
+
+---
+
+ENDPOINT 2: POST /api/admin/menu-groups/shop/{shopId}
+PURPOSE: Create new menu group/category
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - shopId (required): Integer
+
+Request Body (AdminMenuGroupRequestDTO):
+  {
+    "groupName": "Breads",
+    "description": "All types of Indian breads"
+  }
+
+Response (200 OK):
+  Returns AdminMenuGroupResponseDTO with newly created group
+
+---
+
+ENDPOINT 3: PUT /api/admin/menu-groups/{groupId}
+PURPOSE: Rename menu group
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - groupId (required): Integer
+
+Request Body (AdminMenuGroupRequestDTO):
+  {
+    "groupName": "Indian Breads",
+    "description": "Updated description"
+  }
+
+Response (200 OK):
+  Returns updated AdminMenuGroupResponseDTO
+
+---
+
+ENDPOINT 4: DELETE /api/admin/menu-groups/{groupId}
+PURPOSE: Delete menu group
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - groupId (required): Integer
+
+Response (204 No Content):
+  Returns empty response on success
+
+---
+
+ENDPOINT 5: PUT /api/admin/menu-groups/{menuId}/move
+PURPOSE: Move menu item to another group
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - menuId (required): Integer
+
+Request Body (MoveMenuItemRequestDTO):
+  {
+    "targetGroupId": 3
+  }
+
+Response (204 No Content):
+  Returns empty response on success
+
+================================================================================
+6. ADMIN ORDER CONTROLLER (/api/admin/orders)
+================================================================================
+
+ENDPOINT 1: GET /api/admin/orders
+PURPOSE: List all orders with optional status filter
+AUTH REQUIRED: ADMIN role
+
+Query Parameters:
+  - status (optional): OrderStatus (e.g., PENDING, PAID, CANCELLED, DELIVERED)
+
+Example URLs:
+  GET /api/admin/orders
+  GET /api/admin/orders?status=PENDING
+  GET /api/admin/orders?status=PAID
+
+Response (200 OK):
+  Returns List of AdminOrderListDTO:
+  - orderId
+  - customerName
+  - totalAmount
+  - orderStatus
+  - createdAt
+
+---
+
+ENDPOINT 2: GET /api/admin/orders/{orderId}
+PURPOSE: Get detailed information about a specific order
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - orderId (required): Long
+
+Response (200 OK):
+  Returns AdminOrderDetailsDTO with:
+  - orderId
+  - customer details
+  - all order items
+  - total amount
+  - order status
+  - timestamps
+
+---
+
+ENDPOINT 3: PATCH /api/admin/orders/{orderId}/status
+PURPOSE: Update order status (mark as paid/cancelled/delivered)
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - orderId (required): Long
+
+Request Body (UpdateOrderStatusDTO):
+  {
+    "status": "PAID"
+  }
+
+Possible Status Values:
+  - PENDING
+  - PAID
+  - CANCELLED
+  - DELIVERED
+
+Response (200 OK):
+  "Order status updated successfully"
+
+---
+
+ENDPOINT 4: GET /api/admin/orders/revenue/daily
+PURPOSE: Get revenue report for a specific day
+AUTH REQUIRED: ADMIN role
+
+Query Parameters:
+  - date (required): LocalDate (YYYY-MM-DD format)
+
+Example URL:
+  GET /api/admin/orders/revenue/daily?date=2026-04-20
+
+Response (200 OK):
+  Returns AdminRevenueDTO with daily revenue metrics
+
+---
+
+ENDPOINT 5: GET /api/admin/orders/revenue/weekly
+PURPOSE: Get revenue report for a week
+AUTH REQUIRED: ADMIN role
+
+Query Parameters:
+  - date (required): LocalDate (any date within the week)
+
+Example URL:
+  GET /api/admin/orders/revenue/weekly?date=2026-04-20
+
+Response (200 OK):
+  Returns AdminRevenueDTO with weekly revenue metrics
+
+---
+
+ENDPOINT 6: GET /api/admin/orders/revenue/monthly
+PURPOSE: Get revenue report for a specific month
+AUTH REQUIRED: ADMIN role
+
+Query Parameters:
+  - year (required): Integer
+  - month (required): Integer (1-12)
+
+Example URL:
+  GET /api/admin/orders/revenue/monthly?year=2026&month=4
+
+Response (200 OK):
+  Returns AdminRevenueDTO with monthly revenue metrics
+
+---
+
+ENDPOINT 7: GET /api/admin/orders/revenue/yearly
+PURPOSE: Get revenue report for a specific year
+AUTH REQUIRED: ADMIN role
+
+Query Parameters:
+  - year (required): Integer
+
+Example URL:
+  GET /api/admin/orders/revenue/yearly?year=2026
+
+Response (200 OK):
+  Returns AdminRevenueDTO with yearly revenue metrics
+
+---
+
+ENDPOINT 8: GET /api/admin/orders/revenue/custom
+PURPOSE: Get revenue report for custom date range
+AUTH REQUIRED: ADMIN role
+
+Query Parameters:
+  - fromDate (required): LocalDate (YYYY-MM-DD format)
+  - toDate (required): LocalDate (YYYY-MM-DD format)
+
+Example URL:
+  GET /api/admin/orders/revenue/custom?fromDate=2026-04-01&toDate=2026-04-20
+
+Response (200 OK):
+  Returns AdminRevenueDTO with custom range revenue metrics
+
+---
+
+ENDPOINT 9: GET /api/admin/orders/export/excel
+PURPOSE: Export paid orders to Excel file
+AUTH REQUIRED: ADMIN role
+RESPONSE TYPE: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+Query Parameters:
+  - from (required): LocalDate (YYYY-MM-DD format)
+  - to (required): LocalDate (YYYY-MM-DD format)
+
+Example URL:
+  GET /api/admin/orders/export/excel?from=2026-04-01&to=2026-04-20
+
+Response (200 OK):
+  Returns Excel file as downloadable attachment
+
+---
+
+ENDPOINT 10: GET /api/admin/orders/test
+PURPOSE: Export paid orders to PDF file
+AUTH REQUIRED: ADMIN role
+RESPONSE TYPE: application/pdf
+
+Query Parameters:
+  - fromDate (required): LocalDate (YYYY-MM-DD format)
+  - toDate (required): LocalDate (YYYY-MM-DD format)
+
+Example URL:
+  GET /api/admin/orders/test?fromDate=2026-04-01&toDate=2026-04-20
+
+Response (200 OK):
+  Returns PDF file as inline document
+
+================================================================================
+7. ADMIN ANALYTICS CONTROLLER (/api/admin/analytics)
+================================================================================
+
+ENDPOINT 1: GET /api/admin/analytics/top-groups
+PURPOSE: Get most ordered menu groups/categories
+AUTH REQUIRED: ADMIN role
+
+Query Parameters:
+  - fromDate (required): LocalDate (YYYY-MM-DD format)
+  - toDate (required): LocalDate (YYYY-MM-DD format)
+
+Example URL:
+  GET /api/admin/analytics/top-groups?fromDate=2026-04-01&toDate=2026-04-20
+
+Response (200 OK):
+  Returns List of TopGroupDTO with:
+  - groupId
+  - groupName
+  - totalOrders
+  - revenue
+
+---
+
+ENDPOINT 2: GET /api/admin/analytics/top-items/{groupId}/items
+PURPOSE: Get most ordered items within a specific group
+AUTH REQUIRED: ADMIN role
+
+Path Parameters:
+  - groupId (required): Long
+
+Query Parameters:
+  - fromDate (required): LocalDate (YYYY-MM-DD format)
+  - toDate (required): LocalDate (YYYY-MM-DD format)
+
+Example URL:
+  GET /api/admin/analytics/top-items/1/items?fromDate=2026-04-01&toDate=2026-04-20
+
+Response (200 OK):
+  Returns List of TopMenuItemDTO with:
+  - menuId
+  - menuName
+  - totalOrders
+  - revenue
+
+================================================================================
+8. FRONTEND DESIGN RECOMMENDATIONS
+================================================================================
+
+PUBLIC PAGES:
+-----------
+1. LOGIN PAGE
+   - Form with username/email and password fields
+   - Calls: POST to Spring Security, then GET /api/auth/login
+   - Navigate to admin dashboard on success
+
+2. ORDER PLACEMENT PAGE (Customer)
+   - Browse menu items
+   - Add items to cart
+   - Checkout and place order
+   - Calls: POST /api/orders
+
+ADMIN DASHBOARD PAGES:
+--------------------
+1. DASHBOARD/HOME
+   - Overview metrics for selected date range
+   - Calls: GET /api/admin/dashboard?fromDate=X&toDate=Y
+   - Display: Total revenue, total orders, top items
+
+2. MENU MANAGEMENT
+   a) Menu Items Management
+      - List all menu items for shop
+      - Add new item (modal form)
+      - Edit existing item
+      - Toggle active/inactive status
+      - Calls:
+        * GET /api/admin/menus/{shopId}
+        * POST /api/admin/menus/{shopId}
+        * PUT /api/admin/menus/{menuId}
+        * PATCH /api/admin/menus/{menuId}/status
+   
+   b) Menu Groups Management
+      - List all categories for shop
+      - Add new category
+      - Rename category
+      - Delete category
+      - Move items between categories
+      - Calls:
+        * GET /api/admin/menu-groups/shop/{shopId}
+        * POST /api/admin/menu-groups/shop/{shopId}
+        * PUT /api/admin/menu-groups/{groupId}
+        * DELETE /api/admin/menu-groups/{groupId}
+        * PUT /api/admin/menu-groups/{menuId}/move
+
+3. ORDERS MANAGEMENT
+   - List orders with status filter tabs (PENDING, PAID, CANCELLED, DELIVERED)
+   - Click on order to view details
+   - Update order status dropdown/buttons
+   - Calls:
+     * GET /api/admin/orders?status=X
+     * GET /api/admin/orders/{orderId}
+     * PATCH /api/admin/orders/{orderId}/status
+
+4. REPORTS & ANALYTICS
+   a) Revenue Reports
+      - Date range selector
+      - View reports in tabular/chart format
+      - Calls:
+        * GET /api/admin/orders/revenue/daily?date=X
+        * GET /api/admin/orders/revenue/weekly?date=X
+        * GET /api/admin/orders/revenue/monthly?year=X&month=X
+        * GET /api/admin/orders/revenue/yearly?year=X
+        * GET /api/admin/orders/revenue/custom?fromDate=X&toDate=Y
+   
+   b) Analytics Dashboard
+      - Most ordered groups chart
+      - Top-selling items within groups
+      - Calls:
+        * GET /api/admin/analytics/top-groups?fromDate=X&toDate=Y
+        * GET /api/admin/analytics/top-items/{groupId}/items?fromDate=X&toDate=Y
+   
+   c) Export Options
+      - Export to Excel
+      - Export to PDF
+      - Date range selection
+      - Calls:
+        * GET /api/admin/orders/export/excel?from=X&to=Y
+        * GET /api/admin/orders/test?fromDate=X&toDate=Y
+
+================================================================================
+                             END OF DOCUMENTATION
+================================================================================

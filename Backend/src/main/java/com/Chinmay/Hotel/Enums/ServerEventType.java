@@ -1,0 +1,5 @@
+package com.Chinmay.Hotel.Enums;
+
+public enum ServerEventType {
+SYNC_ERROR, API_ERROR, CONNECTION_LOST, DATA_INTEGRITY_ERROR, AUTH_FAILED, SYSTEM_CRITICAL
+}
