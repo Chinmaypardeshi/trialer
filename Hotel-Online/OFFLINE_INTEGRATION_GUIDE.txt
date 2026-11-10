@@ -1,0 +1,964 @@
+================================================================================
+    OFFLINE RESTAURANT SOFTWARE - INTEGRATION GUIDE
+    How to connect your software to the Hotel Online Admin Dashboard
+================================================================================
+
+DOCUMENT FOR: Offline Restaurant Software Development Team
+PURPOSE: Integration specifications to sync data to centralized Admin Dashboard
+VERSION: 1.0
+CREATED: April 20, 2026
+
+================================================================================
+                    1. SYSTEM OVERVIEW
+================================================================================
+
+YOUR SOFTWARE:
+- Runs locally at each restaurant location (offline-first)
+- Has local database for orders, menus, inventory
+- Can work without internet connection
+- Main purpose: POS (Point of Sale) / Restaurant Management
+
+CENTRAL ONLINE SYSTEM (Our System):
+- Cloud-based admin dashboard
+- Aggregates data from ALL restaurant locations
+- Provides analytics and reporting
+- Multi-location chain management
+- Accessible to administrators anywhere
+
+INTEGRATION GOAL:
+Sync your local restaurant data to central online system so that:
+- Administrators can see orders from all shops in one dashboard
+- Revenue analytics are consolidated
+- Menu items can be centrally managed
+- Reports can be generated for entire chain
+
+================================================================================
+                    2. INTEGRATION ARCHITECTURE
+================================================================================
+
+YOUR RESTAURANT                    HOTEL ONLINE SYSTEM
+    ↓  
+[Local Database]                   [Cloud Database - MySQL]
+- Orders                              - ORDERS table
+- Menu Items                           - MENU table  
+- Customer Info                        - SHOPS table
+- Payments                             - SYNC_LOG table
+    ↓
+[Your Sync Engine]    HTTP/HTTPS    [REST APIs]
+(Built by your team)     ↔→          - POST /api/orders
+                                     - POST /api/admin/menus/{shopId}
+                                     - POST /api/admin/menu-groups/shop/{shopId}
+                                     - GET for verification
+    ↓
+[Error Handling]
+- Retry on failure
+- Queue offline data
+- Log all attempts
+
+================================================================================
+                    3. DATA SYNC FLOW
+================================================================================
+
+SCENARIO 1: REAL-TIME ORDER SYNC
+1. Customer places order at your POS
+2. Order stored in your local database
+3. Your sync engine detects new order
+4. Your app calls: POST /api/orders
+5. Order data sent to central system
+6. Central system stores in online database
+7. Admin can view order in dashboard
+8. Log entry created for sync event
+
+SCENARIO 2: PERIODIC MENU SYNC
+1. Admin updates menu at your restaurant
+2. Changes saved to local database
+3. Your sync engine runs (e.g., every 30 minutes)
+4. Detects changed menu items
+5. Your app calls: POST /api/admin/menus/{shopId}
+6. Menu data sent to central system
+7. Online dashboard reflects changes
+
+SCENARIO 3: OFFLINE WITH QUEUE
+1. Internet is down at restaurant
+2. Orders continue to be created locally
+3. Your offline queue stores orders
+4. Internet comes back online
+5. Your sync engine retries queued data
+6. All queued orders synced to central system
+
+================================================================================
+                    4. YOUR SYNC ENGINE - WHAT TO BUILD
+================================================================================
+
+MINIMUM REQUIREMENTS:
+
+1. CONFIGURATION:
+   - Store central system URL (configurable)
+   - Store authentication credentials (encrypted)
+   - Store your SHOP_ID (identifier at central system)
+   - Store unique DEVICE_ID for this location
+
+2. ORDER SYNC:
+   - Monitor local ORDER table for new/unsynced orders
+   - Build JSON payload from order data
+   - POST to central system: /api/orders
+   - Mark order as synced on success
+   - Log error on failure, retry later
+
+3. MENU SYNC:
+   - Monitor local MENU table for new/changed items
+   - Build JSON payload from menu item data
+   - POST to central system: /api/admin/menus/{shopId}
+   - Mark item as synced
+   - Handle errors and retry
+
+4. ERROR HANDLING:
+   - Network disconnection: Queue for retry
+   - Invalid data: Log error, don't retry (fix locally first)
+   - Server error (500): Retry with exponential backoff
+   - Authentication error (401): Check credentials
+   - Retry up to 5 times with increasing delays (1s, 2s, 4s, 8s, 16s)
+
+5. LOGGING:
+   - Log all sync attempts with timestamp
+   - Log successes and failures
+   - Store error messages for debugging
+   - Keep 30 days of sync history
+
+6. SCHEDULING:
+   - Sync orders: Every 1-5 minutes (or real-time if possible)
+   - Sync menus: Every 15-30 minutes
+   - Off-peak sync: Higher frequency during slow hours
+   - Full resync: Daily at midnight
+
+OPTIONAL ENHANCEMENTS:
+- Bidirectional sync (pull menu updates from central)
+- Conflict resolution (if local and remote data differ)
+- Selective sync by shop or category
+- Manual sync trigger in UI
+- Sync status dashboard in your app
+
+================================================================================
+                    5. DATABASE SCHEMA MAPPING
+================================================================================
+
+YOUR LOCAL DATABASE → CENTRAL ONLINE SYSTEM
+
+YOUR TABLE: orders
+  local_order_id → (offline only, don't sync)
+  order_uuid → DEVICE_ORDER_UUID (MUST be unique)
+  shop_id → SHOP_ID (must match central system shop ID)
+  user_id/staff_id → USER_ID (authenticated staff)
+  order_timestamp → ORDER_TIME
+  total_amount → TOTAL_AMOUNT
+  payment_method → MODE_OF_PAYMENT (CASH or ONLINE)
+  payment_timestamp → PAYMENT_TIME
+  status → STATUS (ACTIVE, PAID, CANCELLED)
+  device_id → SOURCE_DEVICE_ID (your device/location identifier)
+  sync_status → (your app only, 0=not synced, 1=synced)
+
+YOUR TABLE: order_items
+  item_id → ORDER_ITEM_ID
+  order_id → ORDER_ID (reference)
+  menu_id → MENU_ID (must match central system menu IDs)
+  quantity → QUANTITY
+  price_per_unit → UNIT_PRICE
+  (total calculated) → TOTAL_PRICE
+
+YOUR TABLE: menu_items
+  menu_id → MENU_ID (must be consistent)
+  shop_id → SHOP_ID
+  category_id → GROUP_ID
+  item_name → ITEM_NAME
+  price → PRICE
+  is_available → IS_ACTIVE
+  last_modified → UPDATED_AT
+  sync_status → (your app only)
+
+YOUR TABLE: menu_categories
+  category_id → GROUP_ID
+  shop_id → SHOP_ID
+  category_name → GROUP_NAME
+  description → DESCRIPTION
+
+IMPORTANT:
+- SHOP_ID must match the ID in central system
+  Example: "Downtown" location = SHOP_ID 1 at central
+- MENU_IDs should be globally unique or prefixed by shop
+  Example: Menu 1001 = shop 1, item 1; Menu 1002 = shop 1, item 2
+- DEVICE_ORDER_UUID should be unique for every order
+  Generate using: UUID.randomUUID() or similar
+- SOURCE_DEVICE_ID identifies your device/location
+  Example: "device-downtown-pos-1" or MAC address
+
+================================================================================
+                    6. API INTEGRATION
+================================================================================
+
+BASE URL: https://your-hotel-online-domain.com/api
+(Provided by central system operator)
+
+AUTHENTICATION:
+- Method: Basic Authentication
+- Format: Authorization: Basic base64(username:password)
+- Credentials: Provided by central system operator
+- Example Python:
+  import base64
+  credentials = "admin@downtown:password123"
+  encoded = base64.b64encode(credentials.encode()).decode()
+  headers = {"Authorization": f"Basic {encoded}"}
+
+---
+
+ENDPOINT 1: CREATE ORDER
+POST https://your-hotel-online-domain.com/api/orders
+
+REQUEST HEADERS:
+  Content-Type: application/json
+  Authorization: Basic <base64_encoded_credentials>
+
+REQUEST BODY (JSON):
+  {
+    "deviceOrderUuid": "uuid-001-downtown-20260420-123456",
+    "userId": 1,
+    "shopId": 1,
+    "orderTime": "2026-04-20T14:30:00",
+    "totalAmount": 450.00,
+    "modeOfPayment": "CASH",
+    "sourceDeviceId": "device-downtown-pos-1",
+    "orderItems": [
+      {
+        "menuId": 1,
+        "quantity": 2,
+        "unitPrice": 50.00
+      },
+      {
+        "menuId": 3,
+        "quantity": 1,
+        "unitPrice": 350.00
+      }
+    ]
+  }
+
+RESPONSE (201 Created):
+  {
+    "orderId": 123,
+    "deviceOrderUuid": "uuid-001-downtown-20260420-123456",
+    "status": "ACTIVE",
+    "message": "Order created successfully"
+  }
+
+ERROR RESPONSES:
+
+  409 Conflict (Duplicate):
+  {
+    "error": "Duplicate deviceOrderUuid: uuid-001-downtown-20260420-123456 already exists"
+  }
+  → Action: Order is already synced, mark as synced in your system, don't retry
+
+  400 Bad Request:
+  {
+    "error": "Invalid shop ID: 99 does not exist"
+  }
+  → Action: Fix the SHOP_ID and retry
+
+  401 Unauthorized:
+  {
+    "error": "Invalid credentials"
+  }
+  → Action: Check credentials, verify authentication
+
+  500 Internal Server Error:
+  {
+    "error": "Database error"
+  }
+  → Action: Retry with exponential backoff, check logs
+
+---
+
+ENDPOINT 2: CREATE/UPDATE MENU ITEM
+POST https://your-hotel-online-domain.com/api/admin/menus/{shopId}
+
+PATH PARAMETERS:
+  shopId: Your shop ID (e.g., 1)
+
+REQUEST HEADERS:
+  Content-Type: application/json
+  Authorization: Basic <base64_encoded_credentials>
+
+REQUEST BODY (JSON) - New Item:
+  {
+    "itemName": "Butter Naan",
+    "description": "Soft naan with butter",
+    "price": 50.00,
+    "groupId": 1
+  }
+
+RESPONSE (201 Created):
+  {
+    "menuId": 45,
+    "shopId": 1,
+    "itemName": "Butter Naan",
+    "price": 50.00,
+    "isActive": true
+  }
+
+UPDATE REQUEST:
+PUT https://your-hotel-online-domain.com/api/admin/menus/{menuId}
+
+PATH PARAMETERS:
+  menuId: The menu ID to update
+
+REQUEST BODY:
+  {
+    "itemName": "Garlic Butter Naan",
+    "description": "Naan with garlic and butter",
+    "price": 60.00,
+    "groupId": 1
+  }
+
+RESPONSE (200 OK):
+  (Same as creation response)
+
+---
+
+ENDPOINT 3: CREATE MENU CATEGORY
+POST https://your-hotel-online-domain.com/api/admin/menu-groups/shop/{shopId}
+
+PATH PARAMETERS:
+  shopId: Your shop ID
+
+REQUEST BODY:
+  {
+    "groupName": "Breads",
+    "description": "All types of Indian breads"
+  }
+
+RESPONSE (201 Created):
+  {
+    "groupId": 5,
+    "shopId": 1,
+    "groupName": "Breads",
+    "description": "All types of Indian breads"
+  }
+
+---
+
+VERIFICATION ENDPOINTS (GET):
+
+Check if order synced:
+GET https://your-hotel-online-domain.com/api/admin/orders?status=ACTIVE
+
+Get your menu items:
+GET https://your-hotel-online-domain.com/api/admin/menus/1
+
+Get your menu categories:
+GET https://your-hotel-online-domain.com/api/admin/menu-groups/shop/1
+
+================================================================================
+                    7. PRACTICAL SYNC ENGINE EXAMPLE
+================================================================================
+
+PSEUDOCODE FOR SYNC ENGINE:
+
+```
+SYNC_ENGINE:
+  
+  Every 5 minutes:
+    1. Get unsynced orders from local database
+    2. For each order:
+       a. Build JSON payload
+       b. Call POST /api/orders
+       c. If success (200-201):
+          - Mark order as synced in local database
+          - Log success
+       d. If error 409 (duplicate):
+          - Mark order as synced (already exists at central)
+          - Log duplicate, no retry needed
+       e. If error 400 (bad request):
+          - Log error with order ID
+          - Don't retry (fix locally)
+          </blockquote>If network error or 500:
+          - Retry after 1 minute (max 5 times)
+          - Use exponential backoff: 1s, 2s, 4s, 8s, 16s
+    
+    3. Get modified menu items (updated in last 5 minutes)
+    4. For each menu item:
+       a. Check if category exists at central, create if needed
+       b. Determine if new or update (via sync_status flag)
+       c. Call POST (new) or PUT (update)
+       d. Mark as synced on success
+       e. Retry on network errors
+    
+    5. Log all activities to sync_log table
+
+ON NETWORK RECONNECTION:
+  1. Detect internet is back online
+  2. Immediately trigger sync_engine
+  3. Process all queued data
+  4. Send any failed items with retries
+
+CONFLICT RESOLUTION:
+  If central system has newer data:
+    - Your local data is outdated
+    - Option 1: Overwrite locally with central data
+    - Option 2: Alert admin to manual review
+    - Option 3: Mark as synced and move on
+
+ERROR HANDLING:
+  200-299: Success, mark as synced
+  4xx: Client error, log and don't retry (except 409)
+  5xx or network: Retry with backoff
+  409: Conflict/duplicate, mark as synced, no retry
+```
+
+CODE EXAMPLE (Python):
+
+```python
+import requests
+import json
+import uuid
+from datetime import datetime
+import base64
+import time
+
+class RestaurantSyncEngine:
+    def __init__(self, central_url, shop_id, device_id, username, password):
+        self.central_url = central_url
+        self.shop_id = shop_id
+        self.device_id = device_id
+        self.auth = (username, password)
+        self.max_retries = 5
+        self.base_retry_delay = 1
+    
+    def sync_orders(self, orders):
+        """Sync unsynced orders to central system"""
+        for order in orders:
+            payload = {
+                "deviceOrderUuid": self.generate_order_uuid(order),
+                "userId": order.get('user_id'),
+                "shopId": self.shop_id,
+                "orderTime": order.get('order_time'),
+                "totalAmount": float(order.get('total_amount')),
+                "modeOfPayment": order.get('payment_method'),
+                "sourceDeviceId": self.device_id,
+                "orderItems": order.get('items', [])
+            }
+            
+            retry_count = 0
+            while retry_count < self.max_retries:
+                try:
+                    response = requests.post(
+                        f"{self.central_url}/api/orders",
+                        json=payload,
+                        auth=self.auth,
+                        timeout=30
+                    )
+                    
+                    if response.status_code in [200, 201]:
+                        print(f"Order {order['id']} synced successfully")
+                        self.mark_order_synced(order['id'])
+                        break
+                    
+                    elif response.status_code == 409:
+                        print(f"Order {order['id']} duplicate, marking as synced")
+                        self.mark_order_synced(order['id'])
+                        break
+                    
+                    elif response.status_code == 400:
+                        print(f"Bad request for order {order['id']}: {response.text}")
+                        self.log_error(order['id'], response.text)
+                        break
+                    
+                    elif response.status_code >= 500:
+                        print(f"Server error, retry {retry_count + 1}/{self.max_retries}")
+                        retry_count += 1
+                        if retry_count < self.max_retries:
+                            time.sleep(self.base_retry_delay ** retry_count)
+                    
+                    else:
+                        print(f"Unknown error: {response.status_code}")
+                        break
+                
+                except requests.exceptions.RequestException as e:
+                    print(f"Network error: {e}, retry {retry_count + 1}/{self.max_retries}")
+                    retry_count += 1
+                    if retry_count < self.max_retries:
+                        time.sleep(self.base_retry_delay ** retry_count)
+    
+    def generate_order_uuid(self, order):
+        """Generate unique order UUID"""
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        return f"uuid-{self.shop_id}-{self.device_id}-{timestamp}-{order['id']}"
+    
+    def mark_order_synced(self, order_id):
+        """Mark order as synced in local database"""
+        # Update your local database: UPDATE orders SET sync_status=1 WHERE id=order_id
+        pass
+    
+    def log_error(self, order_id, error):
+        """Log sync errors"""
+        # Insert into sync_log table
+        pass
+
+# Usage
+sync_engine = RestaurantSyncEngine(
+    central_url="https://hotel-online.example.com/api",
+    shop_id=1,
+    device_id="device-downtown-pos-1",
+    username="admin@downtown",
+    password="secure_password"
+)
+
+orders = get_unsynced_orders_from_local_db()
+sync_engine.sync_orders(orders)
+```
+
+================================================================================
+                    8. IMPLEMENTATION CHECKLIST
+================================================================================
+
+BEFORE YOU START:
+
+  □ Get credentials from central system operator:
+    - Username
+    - Password
+    - SHOP_ID assigned to your location
+    - Central API base URL
+    - DEVICE_ID for your POS
+
+  □ Coordinate menu IDs:
+    - Sync existing menu to central system
+    - Get MENU_IDs assigned by central
+    - Update your local database with these IDs
+    - (Or use UUIDs and map locally)
+
+  □ Test authentication:
+    - Test Basic Auth credentials
+    - Verify SHOP_ID is correct
+    - Test with sample request
+
+DEVELOPMENT:
+
+  □ Set up configuration management
+    - Store credentials securely (not hardcoded)
+    - Environment variables or config file
+    - Allow easy updates without code changes
+
+  □ Build sync engine:
+    - Monitor local database for unsynced data
+    - Build JSON payloads from local data
+    - Validate data before sending
+    - Make API calls to central system
+
+  □ Implement error handling:
+    - Handle network errors (queue and retry)
+    - Handle validation errors (log and fix)
+    - Handle authentication errors
+    - Log all errors with timestamps
+    - Implement exponential backoff for retries
+
+  □ Build queue/retry system:
+    - Queue data if network is down
+    - Retry automatically when online
+    - Track retry counts and delays
+    - Alert admin on repeated failures
+
+  □ Add scheduling:
+    - Sync orders every 1-5 minutes (or real-time)
+    - Sync menus every 15-30 minutes
+    - Daily full resync at midnight
+    - Allow manual trigger for immediate sync
+
+  □ Create logging:
+    - Log all sync attempts with status
+    - Store error messages
+    - Keep 30 days of history
+    - Create admin UI to view sync logs
+
+TESTING:
+
+  □ Unit tests:
+    - Test JSON payload building
+    - Test error handling
+    - Test retry logic
+
+  □ Integration tests:
+    - Test with actual central system (staging)
+    - Test all API endpoints
+    - Test error scenarios
+
+  □ Load testing:
+    - Test with large number of orders
+    - Test with network delays
+    - Test concurrent syncs
+
+  □ Manual testing:
+    - Create test order → verify appears in central dashboard
+    - Create test menu → verify appears in central system
+    - Disconnect internet → queue orders → reconnect → verify sync
+    - Simulate API errors → verify retry mechanism
+
+DEPLOYMENT:
+
+  □ Deploy to all restaurant locations
+  □ Monitor sync logs from each location
+  □ Set up alerts for sync failures
+  □ Document troubleshooting procedures
+  □ Train staff on manual sync if needed
+
+================================================================================
+                    9. TROUBLESHOOTING GUIDE
+================================================================================
+
+PROBLEM: "401 Unauthorized"
+CAUSES:
+  - Wrong username or password
+  - Credentials not Base64 encoded correctly
+  - Credentials expired or revoked
+SOLUTION:
+  - Verify credentials from central operator
+  - Check Base64 encoding in your code
+  - Test with: curl -u username:password <url>
+  - Request new credentials if expired
+
+---
+
+PROBLEM: "409 Conflict - Duplicate UUID"
+CAUSES:
+  - Order with same deviceOrderUuid already exists
+  - Manual retry of same order
+SOLUTION:
+  - This is not an error, mark as synced in your system
+  - Don't retry this order again
+  - Check if another POS already sent this order
+
+---
+
+PROBLEM: "400 Bad Request - Invalid Shop ID"
+CAUSES:
+  - SHOP_ID doesn't exist at central system
+  - Wrong SHOP_ID in your config
+SOLUTION:
+  - Verify SHOP_ID from central operator
+  - Ensure all orders use correct SHOP_ID
+  - Update your config and restart
+
+---
+
+PROBLEM: "No orders appearing in dashboard"
+CAUSES:
+  - Sync not running at all
+  - All orders failing with errors
+  - Network connectivity issue
+SOLUTION:
+  - Check logs for sync errors
+  - Verify network can reach central API
+  - Check authentication with curl:
+    curl -u username:pwd -H "Content-Type: application/json" \
+         -d {} https://central-url/api/orders
+  - Manually trigger sync from admin panel
+  - Check database for unsynced orders
+
+---
+
+PROBLEM: "Network errors / Connection timeout"
+CAUSES:
+  - Central system is down
+  - Internet connectivity issue
+  - Firewall blocking connection
+  - DNS resolution failure
+SOLUTION:
+  - Check if central system is operational (status page)
+  - Test internet connectivity: ping google.com
+  - Check firewall allows outbound HTTPS on port 443
+  - Test DNS: nslookup central-url
+  - Check for VPN requirements
+  - Retry automatically (already implemented)
+
+---
+
+PROBLEM: "Orders synced but not visible in dashboard"
+CAUSES:
+  - Orders synced but dashboard not refreshed
+  - Wrong date filter in dashboard
+  - Orders have status ACTIVE (not yet PAID)
+SOLUTION:
+  - Refresh dashboard page
+  - Check date range in dashboard (should include order date)
+  - Note: ACTIVE orders show in different view than PAID orders
+
+---
+
+PROBLEM: "Retry keeps happening, sync never completes"
+CAUSES:
+  - Validation error in order data
+  - Incompatible data format
+  - Missing required fields
+SOLUTION:
+  - Check error message in logs
+  - Verify all required fields in payload:
+    * deviceOrderUuid (must be unique)
+    * shopId (must exist)
+    * userId (must exist)
+    * totalAmount > 0
+    * orderItems not empty
+  - Check data types match API requirements
+  - Stop retrying after fixing local data
+
+================================================================================
+                    10. DATA QUALITY REQUIREMENTS
+================================================================================
+
+VALIDATIONS YOUR SYNC ENGINE MUST PERFORM:
+
+1. ORDER VALIDATION:
+   ✓ deviceOrderUuid is not null and unique
+   ✓ shopId exists and matches your location
+   ✓ userId is valid staff member
+   ✓ orderTime is valid datetime
+   ✓ totalAmount > 0
+   ✓ orderItems array not empty
+   ✓ Each orderItem has menuId, quantity, unitPrice
+
+2. MENU ITEM VALIDATION:
+   ✓ menuId is not null and unique
+   ✓ itemName is not empty
+   ✓ price > 0
+   ✓ groupId exists
+   ✓ shopId matches your location
+
+3. PAYMENT MODE VALIDATION:
+   ✓ paymentMode is either "CASH" or "ONLINE"
+   ✓ If ONLINE, payment timestamp should be set
+
+4. ORDER STATUS VALIDATION:
+   ✓ status is one of: ACTIVE, PAID, CANCELLED
+   ✓ PAID orders should have paymentTime set
+
+5. NUMERIC PRECISION:
+   ✓ Currency values have max 2 decimal places
+   ✓ No currency symbols ($, ₹, etc.)
+   ✓ Quantities are positive integers
+
+6. STRING VALIDATION:
+   ✓ No null values for required fields
+   ✓ Trim whitespace from item names
+   ✓ Max lengths respected:
+     * itemName: 255 characters
+     * deviceOrderUuid: 100 characters
+
+================================================================================
+                    11. SECURITY BEST PRACTICES
+================================================================================
+
+CREDENTIAL SECURITY:
+  ✓ Never hardcode credentials in source code
+  ✓ Use environment variables or config files
+  ✓ Restrict file permissions (chmod 600)
+  ✓ Rotate credentials periodically
+  ✓ Monitor credential access logs
+  ✓ Use separate credentials per location/device
+
+DATA TRANSMISSION:
+  ✓ Always use HTTPS (not HTTP)
+  ✓ Verify SSL certificates (don't disable verification)
+  ✓ Use TLS 1.2 or higher
+  ✓ Don't send sensitive data in logs
+
+LOCAL DATABASE:
+  ✓ Encrypt sensitive data (passwords, payment tokens)
+  ✓ Restrict database access to application
+  ✓ Regular database backups
+  ✓ Audit logs for data access
+
+API SECURITY:
+  ✓ Validate all API responses
+  ✓ Check response status codes and content
+  ✓ Don't blindly trust API responses
+  ✓ Implement timeout for API calls (30 seconds recommended)
+  ✓ Rate limit your API calls (don't overwhelm server)
+
+ERROR LOGGING:
+  ✓ Log errors for debugging, NOT sensitive data
+  ✓ Don't log full API responses if they contain sensitive info
+  ✓ Secure log files (restrict access)
+  ✓ Regular log rotation and cleanup
+  ✓ Anonymize IP addresses in logs if possible
+
+================================================================================
+                    12. PERFORMANCE OPTIMIZATION
+================================================================================
+
+OPTIMIZE SYNC FREQUENCY:
+  - Orders: Sync every 1-5 minutes
+    (or real-time if possible)
+  - Menus: Sync every 15-30 minutes
+  - Don't sync too frequently (wastes network)
+  - Batch multiple items in single API call
+
+OPTIMIZE PAYLOAD SIZE:
+  - Only send changed/new data
+  - Don't resend all data every sync
+  - Use delta sync (only changes since last sync)
+  - Compress payloads if large
+
+OPTIMIZE DATABASE QUERIES:
+  - Index sync_status column in local database
+  - Use efficient queries to find unsynced items
+  - Minimize database locks during sync
+  - Consider caching for read operations
+
+OPTIMIZE NETWORK:
+  - Sync during off-peak hours if possible
+  - Use connection pooling
+  - Reuse HTTP connections
+  - Implement connection timeouts
+
+MONITOR PERFORMANCE:
+  - Track sync duration
+  - Monitor network bandwidth usage
+  - Alert if sync takes too long
+  - Log performance metrics
+
+================================================================================
+                    13. MONITORING & SUPPORT
+================================================================================
+
+WHAT TO MONITOR:
+
+Sync Status:
+  - Are orders syncing successfully?
+  - What's the average sync time?
+  - How many retries are happening?
+  - Any recurring errors?
+
+Data Quality:
+  - Are orders appearing in central dashboard?
+  - Is data accurate (totals, item counts)?
+  - Any missed orders?
+  - Any duplicate orders?
+
+System Health:
+  - Is sync engine running?
+  - Network connectivity stable?
+  - CPU/Memory consumption normal?
+  - Disk space sufficient for logs?
+
+CREATE DASHBOARDS FOR:
+  - Sync success rate (target: >99%)
+  - Failed syncs (alert if >5 failures/hour)
+  - Average sync time (should be <5 seconds)
+  - Data queue size (manual intervention if >1000)
+
+ALERTS TO SET UP:
+  - Alert if sync fails 5 times in a row
+  - Alert if sync hasn't completed in 1 hour
+  - Alert if queue size exceeds threshold
+  - Alert if authentication fails
+  - Alert if disk space low
+
+SUPPORT CONTACTS:
+  - Central system admin (for API issues)
+  - Your internal IT (for local network issues)
+  - Database admin (for schema changes)
+  - Chef/Manager (for data discrepancies)
+
+================================================================================
+                    14. FREQUENTLY ASKED QUESTIONS
+================================================================================
+
+Q: What if internet is down for a day?
+A: Your sync engine queues orders locally and retries when online.
+   No data is lost. All queued orders sync when connection restored.
+
+Q: What if order is already synced and we retry?
+A: Central system detects duplicate via deviceOrderUuid and rejects (409).
+   Your system marks it as synced already. No duplicates created.
+
+Q: Can we use our own order IDs instead of UUIDs?
+A: Yes, but IDs must be globally unique. UUIDs are safer.
+   Example: shop_id + local_id = 001-001234 (globally unique)
+
+Q: How often should we sync menus?
+A: Every 15-30 minutes is good. Real-time sync if you prefer.
+   If menu changes rarely, adjust to every hour.
+
+Q: Can multiple locations share the same database?
+A: No, each location should have separate SHOP_ID.
+   Each SHOP_ID maps to separate location in central system.
+
+Q: What if central API is slow?
+A: Sync engine retries automatically.
+   Increase timeout from 30s to 60s if needed.
+   Contact central system admin if consistently slow.
+
+Q: How do we handle order modifications?
+A: Once order is paid/completed, treat as final (no changes).
+   If unpaid, sync new order with updated total.
+   Implement versioning if needed.
+
+Q: Can customers see their orders in central dashboard?
+A: No, only admins. Central system is admin-only for now.
+   (May add customer-facing features in future)
+
+Q: How do we handle refunds?
+A: Update order status to CANCELLED.
+   POST to /api/admin/orders/{orderId}/status with "CANCELLED".
+   Sync updated status to central system.
+
+Q: What if we go out of business?
+A: Stop sync (no more orders to send).
+   Historical data remains in central system for records.
+   Other locations continue syncing normally.
+
+================================================================================
+                    15. GETTING STARTED CHECKLIST
+================================================================================
+
+WEEK 1 - SETUP:
+  □ Get credentials and SHOP_ID from central operator
+  □ Test connectivity to central API
+  □ Test authentication with a curl request
+  □ Document all API endpoints you'll use
+  □ Plan your database schema for tracking sync status
+
+WEEK 2 - DEVELOPMENT:
+  □ Build sync configuration management
+  □ Implement order sync endpoint
+  □ Test with sample orders (locally)
+  □ Implement retry logic
+  □ Add error logging
+
+WEEK 3 - TESTING:
+  □ Unit test sync logic
+  □ Test with staging central system
+  □ Create test orders and verify in central dashboard
+  □ Test network disconnection scenarios
+  □ Test all error cases
+
+WEEK 4 - DEPLOYMENT:
+  □ Deploy to production (one location first)
+  □ Monitor logs closely
+  □ Verify orders appear in central dashboard
+  □ Deploy to other locations
+  □ Set up monitoring and alerts
+
+ONGOING:
+  □ Monitor sync logs daily
+  □ Respond to sync failures
+  □ Keep credentials secure
+  □ Update documentation
+  □ Prepare for version updates
+
+================================================================================
+                    END OF INTEGRATION GUIDE
+================================================================================
+
+For questions or issues:
+- Contact Central System Administrator
+- Reference this document section
+- Provide detailed error logs
+- Include order/menu IDs for investigation
+
+Good luck with your integration!
